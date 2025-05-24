@@ -53,34 +53,71 @@ export const ELEVENLABS_VOICES: Voice[] = [
 
 /**
  * Clean text for audio generation by removing non-speech elements
- * - Removes markdown formatting and special characters
- * - Removes section titles (lines ending with colons)
- * - Removes headings (lines with all uppercase or starting with #)
- * - Replaces multiple newlines with a single one
+ * - Removes formatting and special characters
+ * - Handles podcast script elements appropriately
+ * - Preserves the natural flow of speech
  */
 export function cleanTextForAudio(text: string): string {
-  // Remove markdown formatting and special characters
-  let cleanedText = text
-    // Remove markdown headings
+  // First, capture and process speaker labels (Host:, Guest:, etc.)
+  // We'll temporarily replace them with markers we can restore later
+  const speakerMap: {[key: string]: string} = {};
+  let speakerCount = 0;
+  
+  // Step 1: Identify and temporarily replace speaker labels
+  let processedText = text.replace(/^(Host|Guest|Researcher|Speaker \d+|\w+):\s/gim, (match) => {
+    const placeholder = `__SPEAKER_${speakerCount}__`;
+    speakerMap[placeholder] = match;
+    speakerCount++;
+    return placeholder;
+  });
+  
+  // Step 2: Remove non-speech elements
+  processedText = processedText
+    // Remove episode title markers
+    .replace(/^\*\*Episode Title:[^*]+\*\*$/gm, '')
+    .replace(/^Episode Title:[^\n]+$/gm, '')
+    // Remove timing information like (00:00 - 05:00)
+    .replace(/\(\d+:\d+\s*-\s*\d+:\d+\)/g, '')
+    // Remove intro/outro music notes
+    .replace(/^\*\*?Intro Music[^*\n]*\*\*?$/gm, '')
+    .replace(/^\*\*?Outro Music[^*\n]*\*\*?$/gm, '')
+    // Remove segment markers
+    .replace(/^\*\*?Segment [^*\n]*\*\*?$/gm, '')
+    // Remove markdown formatting
     .replace(/^#+\s+.+$/gm, '')
-    // Remove section titles (lines ending with colon)
-    .replace(/^[A-Z][^\n:]+:$/gm, '')
-    // Remove lines that are all caps (likely headers)
-    .replace(/^[A-Z\s\d\.,]+$/gm, '')
-    // Remove non-text markers like [Title], [Introduction], etc.
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // Bold text
+    .replace(/\*([^*]+)\*/g, '$1')     // Italic text
+    // Remove brackets and their contents
     .replace(/\[([^\[\]]+)\]/g, '')
-    // Remove parenthetical references like (Smith et al., 2020)
+    // Remove parenthetical references and stage directions
     .replace(/\([^)]*\d{4}[^)]*\)/g, '')
-    // Remove extra whitespace
+    // Remove sound effect notes
+    .replace(/\(([^)]*(sound effect|music|pause|beat|silence)[^)]*)\)/gi, '')
+    // Remove transitions like "[Transition to next topic]"
+    .replace(/\[[^\[\]]*transition[^\[\]]*\]/gi, '')
+    .replace(/\([^)]*(transition)[^)]*\)/gi, '')
+    // Remove other non-speech formatting
+    .replace(/^-{3,}$/gm, '') // Horizontal rules
+    // Clean up excessive whitespace
     .replace(/\s+/g, ' ')
     // Replace multiple newlines with a single one
     .replace(/\n\s*\n/g, '\n')
     .trim();
-    
-  // Break up very long paragraphs for better speech pacing
-  cleanedText = cleanedText.replace(/([.!?])\s+/g, '$1\n');
   
-  return cleanedText;
+  // Step 3: Restore speaker labels
+  Object.keys(speakerMap).forEach(placeholder => {
+    // Replace each placeholder with its original speaker label but without the colon
+    // This prevents the TTS from reading "Host colon" aloud
+    const label = speakerMap[placeholder].replace(':', '');
+    processedText = processedText.replace(new RegExp(placeholder, 'g'), label + '. ');
+  });
+  
+  // Step 4: Format for better speech pacing
+  processedText = processedText
+    // Add pauses after sentences
+    .replace(/([.!?])\s+/g, '$1. ');
+    
+  return processedText;
 }
 
 export async function generateSpeech(text: string, voiceId: string): Promise<ArrayBuffer> {

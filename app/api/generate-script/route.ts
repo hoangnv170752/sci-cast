@@ -1,44 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { generateText } from "ai"
-import { cerebras } from "@/lib/cerebras"
+import { generatePodcastScript } from "@/lib/gwen"
 
 export async function POST(request: NextRequest) {
   try {
-    const { extractedText, podcastTitle, hostName, category } = await request.json()
+    const { extractedText, podcastTitle, hostName, guestName, category } = await request.json()
 
     if (!extractedText) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 })
     }
 
-    const prompt = `You are an expert science communicator creating an engaging podcast script. Transform the following research content into a compelling 4-5 minute podcast episode.
+    console.log(`Generating podcast script with title: ${podcastTitle}, host: ${hostName}, guest: ${guestName || 'none'}`);
+    
+    // Call our specialized podcast script generation function
+    const script = await generatePodcastScript(
+      extractedText,
+      podcastTitle || `Research on ${category || 'Science'}`,
+      hostName || "Sci-Cast Host",
+      guestName
+    )
 
-Guidelines:
-- Start with a warm welcome to "Sci-Cast"
-- Make complex concepts accessible to a general audience
-- Use storytelling techniques and analogies
-- Explain the significance and real-world applications
-- Keep the tone conversational and enthusiastic
-- End with a call to action for listeners
-- Target length: 800-1200 words (about 4-5 minutes when spoken)
-- Host name: ${hostName || "the host"}
-- Category: ${category || "Technology"}
-- Episode title: ${podcastTitle || "Research Insights"}
-
-Research Content:
-${extractedText}
-
-Create an engaging podcast script that makes this research accessible and exciting for listeners:`
-
-    const { text } = await generateText({
-      model: cerebras("llama3.1-8b"),
-      prompt,
-      maxTokens: 2000,
-      temperature: 0.7,
-    })
-
-    return NextResponse.json({ script: text })
+    return NextResponse.json({ script })
   } catch (error) {
     console.error("Script generation error:", error)
-    return NextResponse.json({ error: "Failed to generate script" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Failed to generate script";
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

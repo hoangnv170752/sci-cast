@@ -47,7 +47,6 @@ async function extractTextWithOpenAI(pdfContent: string, filename: string): Prom
   }
   
   try {
-    // Use OpenAI to extract raw text from PDF
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -55,19 +54,32 @@ async function extractTextWithOpenAI(pdfContent: string, filename: string): Prom
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4-turbo",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: "You are a PDF content extractor. Extract the main text content from the provided PDF data."
+            content: `You are an expert academic content extractor specializing in PDF analysis. Your task is to extract clean, well-structured content from scientific papers and research documents.
+
+Guidelines:
+1. Focus on the main body text, abstract, methodology, results, and discussion sections
+2. Remove headers, footers, page numbers, and citation markers
+3. Preserve section titles and hierarchical structure where possible
+4. Maintain paragraph breaks and formatting essential to understanding
+5. Handle technical terminology, equations, and specialized notation appropriately
+6. Exclude acknowledgments, references, and appendices unless they contain critical information
+7. Present the extracted content in a clean, readable format
+8. Format content for podcast script preparation
+
+Return ONLY the extracted content, no explanations or commentary.`
           },
           {
             role: "user",
-            content: `Extract the main textual content from this PDF:\n\nFilename: ${filename}\nContent: ${pdfContent.substring(0, 50000)}`
+            content: `Extract the scholarly content from this research paper PDF. I need the main textual content only, properly structured for use in podcast creation.\n\nFilename: ${filename}\nContent: ${pdfContent.substring(0, 75000)}`
           }
         ],
-        max_tokens: 4000,
-        temperature: 0.1
+        max_tokens: 8000, // Increased token limit for more comprehensive extraction
+        temperature: 0.0, // Reduced temperature for more deterministic output
+        response_format: { type: "text" } // Ensure we get plain text back
       })
     });
     
@@ -77,6 +89,7 @@ async function extractTextWithOpenAI(pdfContent: string, filename: string): Prom
     
     const result = await response.json();
     const extractedText = result.choices?.[0]?.message?.content || "";
+    console.log("Extracted text:", extractedText);
     
     return {
       text: extractedText,
@@ -92,20 +105,18 @@ async function extractTextWithOpenAI(pdfContent: string, filename: string): Prom
 }
 
 /**
- * Create a podcast-ready summary using Cerebras qwen model
+ * Create a podcast-ready summary using Cerebras model
+ * This function is separated from the extraction to give more control
  */
-async function createPodcastSummary(extractedText: string, filename: string): Promise<ExtractedContent> {
+export async function generatePodcastScript(extractedText: string, podcastTitle: string, hostName: string, guestName?: string): Promise<string> {
   // Check if Cerebras API key is available
   if (!process.env.CEREBRAS_API_KEY) {
-    console.warn('CEREBRAS_API_KEY is not set, returning raw extracted text');
-    return {
-      text: extractedText,
-      source: 'fallback'
-    };
+    console.warn('CEREBRAS_API_KEY is not set, cannot generate podcast script');
+    throw new Error('CEREBRAS_API_KEY is not set');
   }
   
   try {
-    // Use Cerebras with llama-4-scout model to create podcast summary
+    // Use Cerebras with llama-4-scout model to create podcast script
     const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -113,19 +124,31 @@ async function createPodcastSummary(extractedText: string, filename: string): Pr
         "Authorization": `Bearer ${process.env.CEREBRAS_API_KEY}`
       },
       body: JSON.stringify({
-        model: "llama-4-scout-17b-16e-instruct", // Using llama model as shown in your curl example
+        model: "qwen-3-32b", // Using Qwen-3 model as requested
         messages: [
           {
             role: "system",
-            content: "You are an expert podcast content creator who can transform academic content into engaging podcast material."
+            content: "You are an expert podcast content creator who can transform academic content into engaging podcast material. Create dialogue-based scripts with clear speaker labels."
           },
           {
             role: "user",
-            content: `Create an engaging podcast script based on this extracted text from ${filename}:\n\n${extractedText.substring(0, 8000)}\n\nFocus on:\n- The main research question and objectives\n- Key methodology used\n- Most significant findings and results\n- The importance and implications of the research\n- Any particularly interesting or novel aspects\n\nStructure the content as a well-organized podcast script.`
+            content: `Create an engaging podcast script titled "${podcastTitle || 'Research Insights'}" with host ${hostName || 'Host'} ${guestName ? `and guest ${guestName}` : ''}. Base it on this research text:
+
+${extractedText.substring(0, 10000)}
+
+Format the podcast script with:
+- A compelling intro with the podcast title
+- Clear speaker labels (Host: and ${guestName ? 'Guest:' : 'Researcher:'})
+- Conversational dialogue discussing key research points
+- Questions from the host and detailed responses
+- Focus on the main research findings, methodology, and implications
+- A concise conclusion summarizing key takeaways
+
+Structure the content as a professional podcast script that sounds natural when read aloud.`
           }
         ],
-        temperature: 0.2,
-        max_tokens: 2048,
+        temperature: 0.7, // Higher temperature for more creative output
+        max_tokens: 4096, // Longer output for complete script
         top_p: 1
       })
     });
@@ -135,40 +158,34 @@ async function createPodcastSummary(extractedText: string, filename: string): Pr
     }
     
     const result = await response.json();
-    return {
-      text: result.choices?.[0]?.message?.content || extractedText,
-      source: 'cerebras'
-    };
+    const scriptContent = result.choices?.[0]?.message?.content;
+    
+    if (!scriptContent) {
+      throw new Error('No script content returned from API');
+    }
+    
+    return scriptContent;
   } catch (error) {
-    console.error('Error using Cerebras for podcast summary:', error);
-    return {
-      text: extractedText,
-      source: 'fallback'
-    };
+    console.error('Error generating podcast script:', error);
+    throw error;
   }
 }
 
 /**
- * Main function to extract content from PDF and create a podcast summary
+ * Main function to extract content from PDF (extraction only, no podcast script generation)
  */
 export async function extractContentWithGwen(pdfContent: string, filename: string): Promise<string> {
-  // Step 1: Extract raw text with OpenAI or fallback
+  // Prepare fallback extraction for worst case
   const fallbackText = extractPlainTextFromPdf(pdfContent);
   
   try {
-    // Step 1: Extract text content using OpenAI
+    // Extract text content using OpenAI
     const extractedContent = await extractTextWithOpenAI(pdfContent, filename);
     
-    // Step 2: Generate podcast summary using Cerebras if text extraction succeeded
+    // Return the extracted content if successful
     if (extractedContent.text && extractedContent.text.length > 200) {
-      const podcastSummary = await createPodcastSummary(extractedContent.text, filename);
-      
-      // Return the podcast summary with source information
-      if (podcastSummary.source === 'cerebras') {
-        return `[Podcast summary created with Cerebras]\n\n${podcastSummary.text}`;
-      } else if (extractedContent.source === 'openai') {
-        return `[Text extracted with OpenAI]\n\n${extractedContent.text}`;
-      }
+      console.log('Successful text extraction with OpenAI');
+      return extractedContent.text;
     }
     
     // Return fallback text if both steps failed

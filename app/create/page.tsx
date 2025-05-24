@@ -42,6 +42,7 @@ export default function CreatePodcastPage() {
   const [selectedVoice, setSelectedVoice] = useState("21m00Tcm4TlvDq8ikWAM") // Rachel's voice ID
   const [podcastTitle, setPodcastTitle] = useState("")
   const [hostName, setHostName] = useState(user?.user_metadata?.full_name || "")
+  const [guestName, setGuestName] = useState("")
   const [category, setCategory] = useState("")
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState("")
@@ -50,6 +51,7 @@ export default function CreatePodcastPage() {
   const supabase = createClient()
   const [isSaving, setIsSaving] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isTrimming, setIsTrimming] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
@@ -162,6 +164,42 @@ export default function CreatePodcastPage() {
     }
   }
 
+  const trimScript = async () => {
+    if (generatedScript.length <= 5000 || isTrimming) return;
+    
+    setIsTrimming(true);
+    setError("");
+    
+    try {
+      const response = await fetch("/api/trim-script", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          script: generatedScript,
+          targetLength: 4500,
+          podcastTitle,
+          hostName,
+          guestName,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to trim script");
+      }
+      
+      const data = await response.json();
+      setGeneratedScript(data.trimmedScript);
+    } catch (error) {
+      console.error("Error trimming script:", error);
+      setError(error instanceof Error ? error.message : "Failed to trim script");
+    } finally {
+      setIsTrimming(false);
+    }
+  };
+
   const generateScript = async () => {
     setIsGenerating(true)
     setError("")
@@ -177,6 +215,7 @@ export default function CreatePodcastPage() {
           extractedText,
           podcastTitle,
           hostName,
+          guestName,
           category,
         }),
       })
@@ -274,6 +313,7 @@ export default function CreatePodcastPage() {
       const podcastData = {
         title: podcastTitle || "Generated Podcast",
         host: hostName || user.user_metadata?.full_name || "AI Generated",
+        guest: guestName || "",
         category: category || "Technology",
         script: generatedScript,
         voice_id: selectedVoice,
@@ -476,6 +516,26 @@ export default function CreatePodcastPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <Label htmlFor="extract-host">Host Name</Label>
+                      <Input
+                        id="extract-host"
+                        value={hostName}
+                        onChange={(e) => setHostName(e.target.value)}
+                        placeholder="Enter host name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="extract-guest">Guest Name</Label>
+                      <Input
+                        id="extract-guest"
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        placeholder="Enter guest name (optional)"
+                      />
+                    </div>
+                  </div>
                   <Textarea
                     value={extractedText}
                     onChange={(e) => setExtractedText(e.target.value)}
@@ -531,11 +591,34 @@ export default function CreatePodcastPage() {
                           <Badge variant={generatedScript.length > 5000 ? "destructive" : "secondary"}>
                             {generatedScript.length > 5000 ? "Very long" : "Good length"}
                           </Badge>
+                          {generatedScript.length > 5000 && (
+                            <Button 
+                              onClick={trimScript} 
+                              variant="secondary" 
+                              size="sm" 
+                              disabled={isTrimming || generatedScript.length < 5000}
+                              className="ml-2"
+                            >
+                              {isTrimming ? (
+                                <>
+                                  <div className="animate-spin w-3 h-3 border-2 border-current border-t-transparent rounded-full mr-1" />
+                                  Trimming...
+                                </>
+                              ) : (
+                                <>
+                                  <span className="mr-1">✂️</span>
+                                  Trim Content
+                                </>
+                              )}
+                            </Button>
+                          )}
                         </div>
-                        <Button onClick={generateScript} variant="outline" size="sm" disabled={isGenerating}>
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Regenerate
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button onClick={generateScript} variant="outline" size="sm" disabled={isGenerating}>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Regenerate
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -564,6 +647,15 @@ export default function CreatePodcastPage() {
                         value={hostName}
                         onChange={(e) => setHostName(e.target.value)}
                         placeholder="Enter host name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="guest">Guest Name</Label>
+                      <Input
+                        id="guest"
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        placeholder="Enter guest name (optional)"
                       />
                     </div>
                     <div>
