@@ -319,9 +319,6 @@ export default function SciCastApp() {
           </div>
 
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm">
-              Install App
-            </Button>
             {user && (
               <Avatar>
                 <AvatarFallback className="bg-orange-500 text-white">
