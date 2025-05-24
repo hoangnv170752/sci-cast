@@ -15,7 +15,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,
           })
@@ -33,16 +33,29 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/signup") &&
-    !request.nextUrl.pathname.startsWith("/auth")
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
-    const url = request.nextUrl.clone()
-    url.pathname = "/login"
-    return NextResponse.redirect(url)
+  // Protected routes that require authentication
+  const protectedRoutes = ["/create"]
+  const authRoutes = ["/login", "/signup"]
+
+  const isProtectedRoute = protectedRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
+
+  const isAuthRoute = authRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
+
+  // If user is not signed in and trying to access protected route
+  if (!user && isProtectedRoute) {
+    // No user, redirect to login with return URL
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = "/login"
+    redirectUrl.searchParams.set("redirectTo", request.nextUrl.pathname)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // If user is signed in and trying to access auth routes
+  if (user && isAuthRoute) {
+    // User is signed in, redirect to home
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = "/"
+    return NextResponse.redirect(redirectUrl)
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
@@ -51,7 +64,12 @@ export async function updateSession(request: NextRequest) {
   //    const myNewResponse = NextResponse.next({ request })
   // 2. Copy over the cookies, like so:
   //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
-  // 3. Change the myNewResponse object here instead of the supabaseResponse object
+  // 3. Change the myNewResponse object to fit your needs, but avoid changing
+  //    the cookies!
+  // 4. Finally:
+  //    return myNewResponse
+  // If this is not done, you may be causing the browser and server to go out
+  // of sync and terminate the user's session prematurely!
 
   return supabaseResponse
 }

@@ -157,6 +157,16 @@ export default function SciCastApp() {
     }
   }, [currentPodcast])
 
+  // Add this useEffect after the voices loading effect
+  useEffect(() => {
+    // Cleanup audio URL when component unmounts
+    return () => {
+      if (audio) {
+        audio.pause()
+      }
+    }
+  }, [audio])
+
   const togglePlayPause = async () => {
     if (audio && currentPodcast.audioUrl) {
       try {
@@ -248,7 +258,7 @@ export default function SciCastApp() {
 
         <div className="space-y-4">
           <ThemeToggle />
-          {user && (
+          {user ? (
             <div className="border-t border-border pt-4">
               <div className="flex items-center gap-3 mb-3">
                 <Avatar className="w-8 h-8">
@@ -270,6 +280,19 @@ export default function SciCastApp() {
                 <LogOut className="w-4 h-4" />
                 Sign out
               </Button>
+            </div>
+          ) : (
+            <div className="border-t border-border pt-4 space-y-2">
+              <Link href="/login">
+                <Button variant="outline" size="sm" className="w-full">
+                  Sign In
+                </Button>
+              </Link>
+              <Link href="/signup">
+                <Button size="sm" className="w-full bg-orange-500 hover:bg-orange-600">
+                  Sign Up
+                </Button>
+              </Link>
             </div>
           )}
         </div>

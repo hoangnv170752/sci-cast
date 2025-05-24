@@ -1,25 +1,29 @@
+import type { EmailOtpType } from "@supabase/supabase-js"
+import type { NextRequest } from "next/server"
+import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token_hash = searchParams.get("token_hash")
-  const type = searchParams.get("type")
-  const next = searchParams.get("next") ?? "/"
+  const type = searchParams.get("type") as EmailOtpType | null
+  const redirectTo = searchParams.get("redirectTo")
 
   if (token_hash && type) {
-    const supabase = await createClient()
+    const supabase = createClient()
 
     const { error } = await supabase.auth.verifyOtp({
-      type: type as any,
+      type,
       token_hash,
     })
+
     if (!error) {
-      // redirect user to specified redirect URL or root of app
-      return NextResponse.redirect(new URL(next, request.url))
+      // Redirect to the intended destination or home
+      const destination = redirectTo && redirectTo !== "/" ? redirectTo : "/"
+      redirect(destination)
     }
   }
 
   // redirect the user to an error page with some instructions
-  return NextResponse.redirect(new URL("/auth/auth-code-error", request.url))
+  redirect("/auth/auth-code-error")
 }
