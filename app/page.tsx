@@ -68,8 +68,25 @@ export default function SciCastApp() {
     if (audioRef.current) {
       // Set up the audio source when currentPodcast changes
       if (currentPodcast?.audioUrl) {
-        audioRef.current.src = currentPodcast.audioUrl
+        // Stop playback first to avoid race conditions
+        if (isPlaying) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
+        
+        // Make sure we're using the full URL path
+        const audioUrl = currentPodcast.audioUrl.startsWith('/') 
+          ? currentPodcast.audioUrl 
+          : `/${currentPodcast.audioUrl}`
+          
+        console.log('Loading audio from URL:', audioUrl)
+        audioRef.current.src = audioUrl
         audioRef.current.load()
+        
+        // Log any errors that occur when loading
+        audioRef.current.onerror = (e) => {
+          console.error('Audio error:', e)
+        }
       }
 
       // Set up audio event listeners
@@ -153,23 +170,61 @@ export default function SciCastApp() {
     },
   ]
 
-  const togglePlayPause = () => {
-    if (audioRef.current) {
+  const togglePlayPause = async () => {
+    if (!audioRef.current) return;
+    
+    try {
       if (isPlaying) {
-        audioRef.current.pause()
+        // Pause the audio
+        audioRef.current.pause();
+        setIsPlaying(false);
       } else {
-        audioRef.current.play()
+        // First make sure the audio is loaded
+        if (audioRef.current.readyState < 2) { // HAVE_CURRENT_DATA (2) or higher is needed
+          await new Promise((resolve) => {
+            const handleCanPlay = () => {
+              audioRef.current?.removeEventListener('canplay', handleCanPlay);
+              resolve(true);
+            };
+            audioRef.current.addEventListener('canplay', handleCanPlay);
+            // Also set a timeout to avoid getting stuck
+            setTimeout(resolve, 3000);
+          });
+        }
+        
+        // Now play the audio
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              console.log('Audio playback started successfully');
+            })
+            .catch(error => {
+              console.error('Playback error:', error.message);
+              setIsPlaying(false);
+            });
+        }
       }
-      setIsPlaying(!isPlaying)
+    } catch (error) {
+      console.error('Audio control error:', error);
+      setIsPlaying(false);
     }
   }
 
   const handlePodcastClick = (podcast: (typeof availableAudioFiles)[0]) => {
     if (podcast.audioUrl) {
-      setCurrentPodcast(podcast)
-      setIsPlaying(false)
+      // If currently playing, pause first
+      if (isPlaying && audioRef.current) {
+        audioRef.current.pause();
+      }
+      
+      // Then update the podcast
+      setCurrentPodcast(podcast);
+      setIsPlaying(false);
+      
       // Reset time when changing podcasts
-      setCurrentTime(0)
+      setCurrentTime(0);
       // Audio will be loaded by the effect when currentPodcast changes
     }
   }
@@ -590,8 +645,19 @@ export default function SciCastApp() {
             </div>
           </div>
         </div>
-        {/* Hidden audio element */}
-        <audio ref={audioRef} preload="metadata" />
+        {/* Audio element with better debugging */}
+        <audio 
+          ref={audioRef} 
+          preload="auto" 
+          controls={false}
+          onError={(e) => console.error('Audio element error:', e)}
+          onCanPlay={() => console.log('Audio can play now')}
+          onLoadedMetadata={() => console.log('Audio metadata loaded successfully')} 
+          onAbort={() => console.log('Audio loading aborted')}
+          onStalled={() => console.log('Audio download stalled')}
+          onSuspend={() => console.log('Audio loading suspended')}
+          onWaiting={() => console.log('Audio waiting for data')}
+        />
       </div>
     ) : (
       <div className="flex-1 flex items-center justify-center">
