@@ -1,11 +1,5 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Play,
   Pause,
@@ -25,11 +19,18 @@ import {
   Zap,
   Sparkles,
   LogOut,
+  Moon,
+  Sun,
 } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { useAuth } from "@/hooks/use-auth"
+import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 export default function SciCastApp() {
   const { user, loading, signOut } = useAuth()
@@ -37,19 +38,13 @@ export default function SciCastApp() {
   const [currentTime, setCurrentTime] = useState(85)
   const [duration, setDuration] = useState(152)
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, "0")}`
-  }
-
   const availableAudioFiles = [
     {
       id: 1,
       title: "TDSM: Triplet Diffusion for Skeleton-Text Matching in Zero-Shot Action Recognition",
       host: "Dr. Alex Chen",
       listens: "3,247,891",
-      duration: "Loading...",
+      duration: "2:32",
       category: "AI & Machine Learning",
       audioUrl: "/audio/tdsm-podcast.mp3",
       description:
@@ -57,6 +52,21 @@ export default function SciCastApp() {
       featured: true,
     },
   ]
+
+  const [currentPodcast, setCurrentPodcast] = useState(availableAudioFiles[0])
+
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
 
   const upcomingPodcasts = [
     {
@@ -105,86 +115,11 @@ export default function SciCastApp() {
     },
   ]
 
-  // Combine available audio files first, then upcoming podcasts
-  const allPodcasts = [...availableAudioFiles, ...upcomingPodcasts]
-
-  const [currentPodcast, setCurrentPodcast] = useState(availableAudioFiles[0])
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null)
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && currentPodcast.audioUrl) {
-      const audioElement = new Audio()
-
-      // Add error handling
-      audioElement.addEventListener("error", (e) => {
-        console.warn("Audio loading failed:", e)
-        setIsPlaying(false)
-      })
-
-      audioElement.addEventListener("loadedmetadata", () => {
-        const actualDuration = Math.floor(audioElement.duration)
-        setDuration(actualDuration)
-
-        // Update the podcast duration in the availableAudioFiles array
-        const updatedPodcast = {
-          ...currentPodcast,
-          duration: formatTime(actualDuration),
-        }
-        setCurrentPodcast(updatedPodcast)
-      })
-
-      audioElement.addEventListener("timeupdate", () => {
-        setCurrentTime(Math.floor(audioElement.currentTime))
-      })
-
-      audioElement.addEventListener("ended", () => {
-        setIsPlaying(false)
-      })
-
-      // Set the source after adding event listeners
-      audioElement.src = currentPodcast.audioUrl
-      audioElement.load()
-
-      setAudio(audioElement)
-
-      return () => {
-        audioElement.pause()
-        audioElement.removeEventListener("error", () => {})
-        audioElement.removeEventListener("loadedmetadata", () => {})
-        audioElement.removeEventListener("timeupdate", () => {})
-        audioElement.removeEventListener("ended", () => {})
-      }
-    }
-  }, [currentPodcast])
-
-  // Add this useEffect after the voices loading effect
-  useEffect(() => {
-    // Cleanup audio URL when component unmounts
-    return () => {
-      if (audio) {
-        audio.pause()
-      }
-    }
-  }, [audio])
-
-  const togglePlayPause = async () => {
-    if (audio && currentPodcast.audioUrl) {
-      try {
-        if (isPlaying) {
-          audio.pause()
-          setIsPlaying(false)
-        } else {
-          await audio.play()
-          setIsPlaying(true)
-        }
-      } catch (error) {
-        console.warn("Audio playback failed:", error)
-        setIsPlaying(false)
-      }
-    }
+  const togglePlayPause = () => {
+    setIsPlaying(!isPlaying)
   }
 
-  const handlePodcastClick = (podcast: (typeof allPodcasts)[0]) => {
+  const handlePodcastClick = (podcast: (typeof availableAudioFiles)[0]) => {
     if (podcast.audioUrl) {
       setCurrentPodcast(podcast)
       setIsPlaying(false)
@@ -257,7 +192,6 @@ export default function SciCastApp() {
         </div>
 
         <div className="space-y-4">
-          <ThemeToggle />
           {user ? (
             <div className="border-t border-border pt-4">
               <div className="flex items-center gap-3 mb-3">
@@ -319,6 +253,16 @@ export default function SciCastApp() {
           </div>
 
           <div className="flex items-center gap-4">
+            {mounted && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="w-9 h-9 p-0"
+              >
+                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </Button>
+            )}
             {user && (
               <Avatar>
                 <AvatarFallback className="bg-orange-500 text-white">
@@ -346,7 +290,6 @@ export default function SciCastApp() {
 
             {/* Hero Section */}
             <div className="relative h-80 rounded-lg overflow-hidden mb-8 bg-gradient-to-r from-orange-600 to-orange-400">
-              <Image src="/images/hero-podcast.png" alt="Featured Podcast" fill className="object-cover opacity-20" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               <div className="absolute bottom-6 left-6 text-white">
                 <Badge className="mb-2 bg-orange-500">
@@ -488,7 +431,6 @@ export default function SciCastApp() {
                     <h3 className="font-semibold mb-4">Host Spotlight</h3>
                     <div className="flex items-center gap-3 mb-4">
                       <Avatar className="w-12 h-12">
-                        <AvatarImage src="/placeholder.svg?height=48&width=48" />
                         <AvatarFallback>SC</AvatarFallback>
                       </Avatar>
                       <div>
