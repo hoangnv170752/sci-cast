@@ -42,33 +42,32 @@ export async function POST(request: NextRequest) {
     // Store public URL path
     publicPath = `/file/${uniqueFilename}`
 
-    try {
-      // Extract text from the file
-      const extractedText = await extractTextFromFile(file)
+    // Extract text from the file
+    const extractedText = await extractTextFromFile(file)
 
-      if (!extractedText || extractedText.trim().length === 0) {
-        return NextResponse.json({ error: "No text could be extracted from the file" }, { status: 400 })
-      }
-      
-      // Check if we got an error message (as string) instead of actual content
-      if (extractedText.includes("Unable to extract content") || 
-          extractedText.includes("No text could be extracted")) {
-        return NextResponse.json({ 
-          warning: extractedText,
-          text: "The system was unable to properly extract content from this file. You may want to try a different file format or manually edit the extracted text below.",
-          filename: file.name,
-          size: file.size,
-          filePath: publicPath
-        })
-      }
-
-      return NextResponse.json({
-        text: extractedText.trim(),
+    if (!extractedText || extractedText.trim().length === 0) {
+      return NextResponse.json({ error: "No text could be extracted from the file" }, { status: 400 })
+    }
+    
+    // Check if we got an error message (as string) instead of actual content
+    if (extractedText.includes("Unable to extract content") || 
+        extractedText.includes("No text could be extracted")) {
+      return NextResponse.json({ 
+        warning: extractedText,
+        text: "The system was unable to properly extract content from this file. You may want to try a different file format or manually edit the extracted text below.",
         filename: file.name,
         size: file.size,
         filePath: publicPath
       })
     }
+
+    return NextResponse.json({
+      text: extractedText.trim(),
+      filename: file.name,
+      size: file.size,
+      filePath: publicPath
+    });
+    
   } catch (error) {
     console.error("Text extraction error:", error)
     

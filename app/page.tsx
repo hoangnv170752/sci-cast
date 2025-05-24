@@ -26,6 +26,7 @@ import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { useTheme } from "next-themes"
 import { useToast } from "@/components/toast-provider"
+import { getAllPodcasts, Podcast } from "@/lib/podcasts"
 import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,29 +41,26 @@ export default function SciCastApp() {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
-
-  const availableAudioFiles = [
-    {
-      id: 1,
-      title: "TDSM: Triplet Diffusion for Skeleton-Text Matching in Zero-Shot Action Recognition",
-      host: "Dr. Alex Chen",
-      listens: "3,247,891",
-      duration: "2:32",
-      category: "AI & Machine Learning",
-      audioUrl: "/audio/TDSM.mp3",
-      description:
-        "Deep dive into cutting-edge research on skeleton-based action recognition using triplet diffusion models.",
-      featured: true,
-    },
-  ]
-
-  const [currentPodcast, setCurrentPodcast] = useState(availableAudioFiles[0])
+  const [availableAudioFiles, setAvailableAudioFiles] = useState<Podcast[]>([])
+  const [currentPodcast, setCurrentPodcast] = useState<Podcast | null>(null)
 
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+  
+  // Load podcasts on mount
+  useEffect(() => {
+    // Get all podcasts from the library
+    const podcasts = getAllPodcasts()
+    setAvailableAudioFiles(podcasts)
+    
+    // If we haven't set a current podcast yet, set it to the first one
+    if (podcasts.length > 0 && !currentPodcast) {
+      setCurrentPodcast(podcasts[0])
+    }
   }, [])
 
   // Handle audio element setup and events
@@ -319,15 +317,16 @@ export default function SciCastApp() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="flex items-center justify-between p-6 border-b border-border">
-          <div className="flex-1 max-w-md mx-8">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="What do you want to learn about?" className="pl-10 bg-muted/50" />
+      {currentPodcast ? (
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="flex items-center justify-between p-6 border-b border-border">
+            <div className="flex-1 max-w-md mx-8">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="What do you want to learn about?" className="pl-10 bg-muted/50" />
+              </div>
             </div>
-          </div>
 
           <div className="flex items-center gap-4">
             {mounted && (
@@ -594,6 +593,14 @@ export default function SciCastApp() {
         {/* Hidden audio element */}
         <audio ref={audioRef} preload="metadata" />
       </div>
+    ) : (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full mx-auto mb-4" />
+          <p>Loading podcasts...</p>
+        </div>
+      </div>
+    )}
     </div>
   )
 }

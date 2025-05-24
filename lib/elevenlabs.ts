@@ -51,7 +51,41 @@ export const ELEVENLABS_VOICES: Voice[] = [
   },
 ]
 
+/**
+ * Clean text for audio generation by removing non-speech elements
+ * - Removes markdown formatting and special characters
+ * - Removes section titles (lines ending with colons)
+ * - Removes headings (lines with all uppercase or starting with #)
+ * - Replaces multiple newlines with a single one
+ */
+export function cleanTextForAudio(text: string): string {
+  // Remove markdown formatting and special characters
+  let cleanedText = text
+    // Remove markdown headings
+    .replace(/^#+\s+.+$/gm, '')
+    // Remove section titles (lines ending with colon)
+    .replace(/^[A-Z][^\n:]+:$/gm, '')
+    // Remove lines that are all caps (likely headers)
+    .replace(/^[A-Z\s\d\.,]+$/gm, '')
+    // Remove non-text markers like [Title], [Introduction], etc.
+    .replace(/\[([^\[\]]+)\]/g, '')
+    // Remove parenthetical references like (Smith et al., 2020)
+    .replace(/\([^)]*\d{4}[^)]*\)/g, '')
+    // Remove extra whitespace
+    .replace(/\s+/g, ' ')
+    // Replace multiple newlines with a single one
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+    
+  // Break up very long paragraphs for better speech pacing
+  cleanedText = cleanedText.replace(/([.!?])\s+/g, '$1\n');
+  
+  return cleanedText;
+}
+
 export async function generateSpeech(text: string, voiceId: string): Promise<ArrayBuffer> {
+  // Clean the text before sending to ElevenLabs
+  const cleanedText = cleanTextForAudio(text);
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
     method: "POST",
     headers: {
@@ -60,7 +94,7 @@ export async function generateSpeech(text: string, voiceId: string): Promise<Arr
       "xi-api-key": process.env.ELEVENLABS_API_KEY!,
     },
     body: JSON.stringify({
-      text,
+      text: cleanedText,
       model_id: "eleven_monolingual_v1",
       voice_settings: {
         stability: 0.5,

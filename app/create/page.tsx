@@ -18,6 +18,7 @@ import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { savePodcast as savePodcastToLibrary } from "@/lib/podcasts"
 
 interface Voice {
   voice_id: string
@@ -48,8 +49,10 @@ export default function CreatePodcastPage() {
   const router = useRouter()
   const supabase = createClient()
   const [isSaving, setIsSaving] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
 
   // Load available voices on component mount
   useEffect(() => {
@@ -124,6 +127,10 @@ export default function CreatePodcastPage() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    processFile(file)
+  }
+
+  const processFile = async (file: File) => {
     setUploadedFile(file)
     setIsExtracting(true)
     setError("")
@@ -263,36 +270,28 @@ export default function CreatePodcastPage() {
     setError("")
 
     try {
-      // In a real implementation, you would upload the audio file to Supabase Storage
-      // and save the podcast metadata to the database
-
+      // Create the podcast data object
       const podcastData = {
         title: podcastTitle || "Generated Podcast",
-        host_name: hostName || user.user_metadata?.full_name || "AI Generated",
+        host: hostName || user.user_metadata?.full_name || "AI Generated",
         category: category || "Technology",
         script: generatedScript,
         voice_id: selectedVoice,
         voice_name: voices.find((v) => v.voice_id === selectedVoice)?.name || "Selected Voice",
         user_id: user.id,
         created_at: new Date().toISOString(),
-        // audio_url would be set after uploading to storage
-        audio_url: audioUrl, // This would be the Supabase Storage URL in production
-        duration: null, // Would be calculated from the audio file
-        listens: 0,
+        audioUrl: audioUrl || "", // URL to the generated audio file
+        duration: "2:30", // For demo purposes
+        description: generatedScript.substring(0, 150) + "...", // Use the first part of the script as description
+        listens: "0",
         featured: false,
       }
 
-      // TODO: Implement actual database save
-      // const { data, error } = await supabase
-      //   .from('podcasts')
-      //   .insert([podcastData])
+      // Save to our podcast library (localStorage)
+      const savedPodcast = savePodcastToLibrary(podcastData)
+      console.log("Podcast saved successfully:", savedPodcast)
 
-      console.log("Podcast data to save:", podcastData)
-
-      // Simulate save delay
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      alert("Podcast saved successfully! Redirecting to main page...")
+      alert("Podcast saved successfully! Your podcast will now appear on the homepage.")
       router.push("/")
     } catch (error) {
       console.error("Save error:", error)
@@ -392,12 +391,46 @@ export default function CreatePodcastPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div
-                    className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-orange-500 transition-colors"
+                    ref={dropZoneRef}
+                    className={`border-2 border-dashed ${isDragging ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/20' : 'border-border'} rounded-lg p-8 text-center cursor-pointer hover:border-orange-500 transition-colors`}
                     onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setIsDragging(true)
+                    }}
+                    onDragEnter={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setIsDragging(true)
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setIsDragging(false)
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setIsDragging(false)
+                      
+                      const files = e.dataTransfer.files
+                      if (files.length > 0) {
+                        const file = files[0]
+                        const allowedTypes = ['.pdf', '.docx', '.txt']
+                        const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+                        
+                        if (allowedTypes.includes(fileExtension)) {
+                          processFile(file)
+                        } else {
+                          setError(`Unsupported file type. Please upload PDF, DOCX, or TXT files.`)
+                        }
+                      }
+                    }}
                   >
-                    <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-medium mb-2">Drop your research paper here</h3>
-                    <p className="text-muted-foreground mb-4">Supports PDF files (processed with Gwen 3 AI), DOCX, and TXT up to 10MB</p>
+                    <Upload className={`w-12 h-12 mx-auto mb-4 ${isDragging ? 'text-orange-500' : 'text-muted-foreground'}`} />
+                    <h3 className="text-lg font-medium mb-2">{isDragging ? 'Drop your file here!' : 'Drop your research paper here'}</h3>
+                    <p className="text-muted-foreground mb-4">Supports PDF files (processed with Qwen 3 AI), DOCX, and TXT up to 10MB</p>
                     <Button disabled={isExtracting}>
                       {isExtracting ? (
                         <>
