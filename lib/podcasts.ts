@@ -10,7 +10,7 @@ export interface Podcast {
   category: string;
   audioUrl: string;
   description: string;
-  featured: boolean;
+  featured?: boolean; // Make featured optional to handle data from Supabase
   script?: string;
   voice_id?: string;
   voice_name?: string;
@@ -168,12 +168,28 @@ function writePodcastsToFile(podcasts: Podcast[]): void {
   }
 }
 
+import { fetchPodcastsFromSupabase } from './supabase/storage';
+
 // Get all podcasts (including saved ones)
-export function getAllPodcasts(): Podcast[] {
+export async function getAllPodcasts(): Promise<Podcast[]> {
   // Start with the default podcast
   const podcasts = [defaultPodcast];
   
-  // Add podcasts from file
+  try {
+    // Try to fetch podcasts from Supabase first (starting with the 2nd element)
+    const supabasePodcasts = await fetchPodcastsFromSupabase();
+    
+    if (supabasePodcasts && supabasePodcasts.length > 0) {
+      // Skip the first podcast if it's the same as our default podcast (id: 1)
+      const podcastsToAdd = supabasePodcasts.filter(p => p.id !== 1);
+      podcasts.push(...podcastsToAdd);
+      return podcasts;
+    }
+  } catch (error) {
+    console.error('Error fetching from Supabase, falling back to local:', error);
+  }
+  
+  // Fallback to local if Supabase fetch fails
   const savedPodcasts = readPodcastsFromFile();
   podcasts.push(...savedPodcasts);
   
@@ -186,6 +202,24 @@ export function getAllPodcasts(): Podcast[] {
     if (newPodcasts.length > 0) {
       writePodcastsToFile(savedPodcasts.concat(newPodcasts));
     }
+  }
+  
+  return podcasts;
+}
+
+// For backward compatibility with non-async code
+export function getAllPodcastsSync(): Podcast[] {
+  // Start with the default podcast
+  const podcasts = [defaultPodcast];
+  
+  // Add podcasts from file
+  const savedPodcasts = readPodcastsFromFile();
+  podcasts.push(...savedPodcasts);
+  
+  // Scan for new audio files (server-side only)
+  if (typeof window === 'undefined') {
+    const newPodcasts = scanAudioDirectory(podcasts);
+    podcasts.push(...newPodcasts);
   }
   
   return podcasts;

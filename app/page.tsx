@@ -26,7 +26,7 @@ import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { useTheme } from "next-themes"
 import { useToast } from "@/components/toast-provider"
-import { getAllPodcasts, Podcast } from "@/lib/podcasts"
+import { getAllPodcasts, getAllPodcastsSync, Podcast } from "@/lib/podcasts"
 import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -53,14 +53,29 @@ export default function SciCastApp() {
   
   // Load podcasts on mount
   useEffect(() => {
-    // Get all podcasts from the library
-    const podcasts = getAllPodcasts()
-    setAvailableAudioFiles(podcasts)
-    
-    // If we haven't set a current podcast yet, set it to the first one
-    if (podcasts.length > 0 && !currentPodcast) {
-      setCurrentPodcast(podcasts[0])
+    async function loadPodcasts() {
+      try {
+        // Get all podcasts from the library (including from Supabase)
+        const podcasts = await getAllPodcasts()
+        setAvailableAudioFiles(podcasts)
+        
+        // If we haven't set a current podcast yet, set it to the first one
+        if (podcasts.length > 0 && !currentPodcast) {
+          setCurrentPodcast(podcasts[0])
+        }
+      } catch (error) {
+        console.error('Failed to load podcasts:', error)
+        // Fallback to local podcasts
+        const localPodcasts = getAllPodcastsSync()
+        setAvailableAudioFiles(localPodcasts)
+        
+        if (localPodcasts.length > 0 && !currentPodcast) {
+          setCurrentPodcast(localPodcasts[0])
+        }
+      }
     }
+    
+    loadPodcasts()
   }, [])
 
   // Handle audio element setup and events
@@ -91,6 +106,7 @@ export default function SciCastApp() {
 
       // Set up audio event listeners
       const audio = audioRef.current
+      if (!audio) return // Skip if audio element isn't available
       
       const handleTimeUpdate = () => {
         setCurrentTime(Math.floor(audio.currentTime))
@@ -186,14 +202,17 @@ export default function SciCastApp() {
               audioRef.current?.removeEventListener('canplay', handleCanPlay);
               resolve(true);
             };
-            audioRef.current.addEventListener('canplay', handleCanPlay);
+            audioRef.current?.addEventListener('canplay', handleCanPlay);
             // Also set a timeout to avoid getting stuck
             setTimeout(resolve, 3000);
           });
         }
         
         // Now play the audio
-        const playPromise = audioRef.current.play();
+        const audio = audioRef.current;
+        if (!audio) return; // Skip if audio element isn't available
+        
+        const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise
             .then(() => {
