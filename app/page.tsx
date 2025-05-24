@@ -25,7 +25,8 @@ import {
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
+import { useToast } from "@/components/toast-provider"
+import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -34,9 +35,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 export default function SciCastApp() {
   const { user, loading, signOut } = useAuth()
+  const { toast } = useToast()
   const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(85)
-  const [duration, setDuration] = useState(152)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   const availableAudioFiles = [
     {
@@ -46,7 +49,7 @@ export default function SciCastApp() {
       listens: "3,247,891",
       duration: "2:32",
       category: "AI & Machine Learning",
-      audioUrl: "/audio/tdsm-podcast.mp3",
+      audioUrl: "/audio/TDSM.mp3",
       description:
         "Deep dive into cutting-edge research on skeleton-based action recognition using triplet diffusion models.",
       featured: true,
@@ -61,6 +64,43 @@ export default function SciCastApp() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Handle audio element setup and events
+  useEffect(() => {
+    if (audioRef.current) {
+      // Set up the audio source when currentPodcast changes
+      if (currentPodcast?.audioUrl) {
+        audioRef.current.src = currentPodcast.audioUrl
+        audioRef.current.load()
+      }
+
+      // Set up audio event listeners
+      const audio = audioRef.current
+      
+      const handleTimeUpdate = () => {
+        setCurrentTime(Math.floor(audio.currentTime))
+      }
+      
+      const handleDurationChange = () => {
+        setDuration(Math.floor(audio.duration))
+      }
+      
+      const handleEnded = () => {
+        setIsPlaying(false)
+        setCurrentTime(0)
+      }
+
+      audio.addEventListener('timeupdate', handleTimeUpdate)
+      audio.addEventListener('durationchange', handleDurationChange)
+      audio.addEventListener('ended', handleEnded)
+      
+      return () => {
+        audio.removeEventListener('timeupdate', handleTimeUpdate)
+        audio.removeEventListener('durationchange', handleDurationChange)
+        audio.removeEventListener('ended', handleEnded)
+      }
+    }
+  }, [currentPodcast])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -116,13 +156,23 @@ export default function SciCastApp() {
   ]
 
   const togglePlayPause = () => {
-    setIsPlaying(!isPlaying)
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause()
+      } else {
+        audioRef.current.play()
+      }
+      setIsPlaying(!isPlaying)
+    }
   }
 
   const handlePodcastClick = (podcast: (typeof availableAudioFiles)[0]) => {
     if (podcast.audioUrl) {
       setCurrentPodcast(podcast)
       setIsPlaying(false)
+      // Reset time when changing podcasts
+      setCurrentTime(0)
+      // Audio will be loaded by the effect when currentPodcast changes
     }
   }
 
@@ -153,15 +203,36 @@ export default function SciCastApp() {
         </div>
 
         <nav className="space-y-4 mb-8">
-          <Button variant="ghost" className="w-full justify-start gap-3 text-orange-500">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start gap-3 text-orange-500"
+            onClick={() => toast({
+              title: "In development process...",
+              description: "This feature will be available soon."
+            })}
+          >
             <Home className="w-5 h-5" />
             Home
           </Button>
-          <Button variant="ghost" className="w-full justify-start gap-3">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start gap-3"
+            onClick={() => toast({
+              title: "In development process...",
+              description: "This feature will be available soon."
+            })}
+          >
             <Search className="w-5 h-5" />
             Search
           </Button>
-          <Button variant="ghost" className="w-full justify-start gap-3">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start gap-3"
+            onClick={() => toast({
+              title: "In development process...",
+              description: "This feature will be available soon."
+            })}
+          >
             <Library className="w-5 h-5" />
             Your Library
           </Button>
@@ -174,7 +245,14 @@ export default function SciCastApp() {
               Create Podcast
             </Button>
           </Link>
-          <Button variant="ghost" className="w-full justify-start gap-3">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start gap-3"
+            onClick={() => toast({
+              title: "In development process...",
+              description: "This feature will be available soon."
+            })}
+          >
             <Heart className="w-5 h-5" />
             Liked Episodes
           </Button>
@@ -183,10 +261,18 @@ export default function SciCastApp() {
         <div className="space-y-2 flex-1">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Categories</h3>
           {categories.map((category) => (
-            <Button key={category.name} variant="ghost" className="w-full justify-start gap-3 text-sm">
+            <Button 
+              key={category.name} 
+              variant="ghost" 
+              className="w-full justify-start gap-3 text-sm"
+              onClick={() => toast({
+                title: "In development process...",
+                description: "This feature will be available soon."
+              })}
+            >
               <category.icon className="w-4 h-4" />
               <span className="flex-1 text-left">{category.name}</span>
-              <span className="text-xs text-muted-foreground">{category.count}</span>
+              {/* <span className="text-xs text-muted-foreground">{category.count}</span> */}
             </Button>
           ))}
         </div>
@@ -236,15 +322,6 @@ export default function SciCastApp() {
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="flex items-center justify-between p-6 border-b border-border">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm">
-              <SkipBack className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm">
-              <SkipForward className="w-4 h-4" />
-            </Button>
-          </div>
-
           <div className="flex-1 max-w-md mx-8">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -303,13 +380,6 @@ export default function SciCastApp() {
                     {isPlaying ? <Pause className="w-5 h-5 mr-2" /> : <Play className="w-5 h-5 mr-2" />}
                     {isPlaying ? "Pause" : "Play"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="border-white text-white hover:bg-white hover:text-black"
-                  >
-                    Follow
-                  </Button>
                 </div>
               </div>
             </div>
@@ -350,7 +420,7 @@ export default function SciCastApp() {
                                 </Badge>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm text-muted-foreground">{podcast.listens} listens</p>
+                                {/* <p className="text-sm text-muted-foreground">{podcast.listens} listens</p> */}
                                 <p className="text-sm font-medium">{podcast.duration}</p>
                                 <Badge className="mt-1 bg-orange-500 text-white text-xs">
                                   <Play className="w-3 h-3 mr-1" />
@@ -391,7 +461,7 @@ export default function SciCastApp() {
                               </Badge>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm text-muted-foreground">{podcast.listens} listens</p>
+                              {/* <p className="text-sm text-muted-foreground">{podcast.listens} listens</p> */}
                               <p className="text-sm text-muted-foreground">{podcast.duration}</p>
                               <Badge variant="outline" className="mt-1 text-xs">
                                 Coming Soon
@@ -521,6 +591,8 @@ export default function SciCastApp() {
             </div>
           </div>
         </div>
+        {/* Hidden audio element */}
+        <audio ref={audioRef} preload="metadata" />
       </div>
     </div>
   )

@@ -37,6 +37,7 @@ export default function CreatePodcastPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null)
   const [selectedVoice, setSelectedVoice] = useState("21m00Tcm4TlvDq8ikWAM") // Rachel's voice ID
   const [podcastTitle, setPodcastTitle] = useState("")
   const [hostName, setHostName] = useState(user?.user_metadata?.full_name || "")
@@ -144,6 +145,7 @@ export default function CreatePodcastPage() {
       }
 
       setExtractedText(data.text)
+      setUploadedFilePath(data.filePath)
       setCurrentStep(2)
       setProgress(50)
     } catch (error) {
@@ -211,6 +213,7 @@ export default function CreatePodcastPage() {
         body: JSON.stringify({
           script: generatedScript,
           voiceId: selectedVoice,
+          title: podcastTitle || 'podcast'
         }),
       })
 
@@ -219,16 +222,15 @@ export default function CreatePodcastPage() {
         throw new Error(errorData.error || "Failed to generate audio")
       }
 
-      // Create a blob URL for the audio
-      const audioBlob = await response.blob()
-
-      // Revoke previous URL if it exists
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl)
+      // Get the audio URL from the response
+      const data = await response.json()
+      
+      if (!data.success || !data.audioUrl) {
+        throw new Error("Failed to generate audio: No audio URL returned")
       }
-
-      const newAudioUrl = URL.createObjectURL(audioBlob)
-      setAudioUrl(newAudioUrl)
+      
+      // Set the public URL to the audio file
+      setAudioUrl(data.audioUrl)
       setCurrentStep(4)
     } catch (error) {
       console.error("Audio generation error:", error)
@@ -240,6 +242,8 @@ export default function CreatePodcastPage() {
 
   const downloadAudio = () => {
     if (audioUrl) {
+      // For files stored in the public directory, we can just create a link
+      // with the public URL and click it to download
       const link = document.createElement("a")
       link.href = audioUrl
       link.download = `${podcastTitle || "podcast"}.mp3`
@@ -319,7 +323,7 @@ export default function CreatePodcastPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Badge variant="secondary">Powered by Cerebras & ElevenLabs</Badge>
+              <Badge variant="secondary">Powered by Cerebras Gwen 3 & ElevenLabs</Badge>
               {user && (
                 <div className="text-sm text-muted-foreground">
                   Welcome, {user.user_metadata?.full_name || user.email}
@@ -393,7 +397,7 @@ export default function CreatePodcastPage() {
                   >
                     <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="text-lg font-medium mb-2">Drop your research paper here</h3>
-                    <p className="text-muted-foreground mb-4">Supports PDF, DOCX, TXT files up to 10MB</p>
+                    <p className="text-muted-foreground mb-4">Supports PDF files (processed with Gwen 3 AI), DOCX, and TXT up to 10MB</p>
                     <Button disabled={isExtracting}>
                       {isExtracting ? (
                         <>
